@@ -1,5 +1,16 @@
 use paste::paste;
 
+pub trait MultiVecColumns {
+    type ColRef<'a> where Self: 'a;
+    type ColMut<'a> where Self: 'a;
+    type ItemRef<'a> where Self: 'a;
+    type ItemMut<'a> where Self: 'a;
+    fn col<'a>(&'a self, index: usize) -> Self::ColRef<'a>;
+    fn col_mut<'a>(&'a mut self, index: usize) -> Self::ColMut<'a>;
+    fn item<'a>(&'a self, row: usize, col: usize) -> Self::ItemRef<'a>;
+    fn item_mut<'a>(&'a mut self, row: usize, col: usize) -> Self::ItemMut<'a>;
+}
+
 macro_rules! impl_multivec {
     (
         $count:tt = $($n:tt),+
@@ -7,6 +18,7 @@ macro_rules! impl_multivec {
         paste!{
             pub mod [<multi_vec $count>] {
                 use std::{alloc::{self, Layout}, mem, ptr::{self, NonNull}};
+                pub use super::MultiVecColumns;
 
                 struct RawMultiVec<$([<T $n>]),+> {
                     ptrs: ($(NonNull<[<T $n>]>),+),
@@ -285,6 +297,80 @@ macro_rules! impl_multivec {
                         result
                     }
                 }
+
+                #[doc = "An enum of each type in a table-cell of [`" MultiVec $count "`]"]
+                pub enum [<MultiVec $count Item>]<$([<T $n>]),+> {
+                    $(
+                        #[doc = "The type stored in column " $n]
+                        [<Col $n>]([<T $n>])
+                    ),+
+                }
+
+                impl<$([<T $n>]: std::fmt::Debug),+> std::fmt::Debug for [<MultiVec $count Item>]<$([<T $n>]),+> {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            $(Self::[<Col $n>](x) => f.debug_tuple(stringify!([<Col $n>])).field(x).finish(),)+
+                        }
+                    }
+                }
+                impl<$([<T $n>]: Clone),+> Clone for [<MultiVec $count Item>]<$([<T $n>]),+> {
+                    fn clone(&self) -> Self {
+                        match self {
+                            $(Self::[<Col $n>](x) => Self::[<Col $n>](x.clone()),)+
+                        }
+                    }
+                }
+                impl<$([<T $n>]: Copy),+> Copy for [<MultiVec $count Item>]<$([<T $n>]),+> {}
+                impl<$([<T $n>]: PartialEq),+> PartialEq for [<MultiVec $count Item>]<$([<T $n>]),+> {
+                    fn eq(&self, rhs: &Self) -> bool {
+                        match (self, rhs) {
+                            $((Self::[<Col $n>](a), Self::[<Col $n>](b)) => a.eq(b),)+
+                            _ => false,
+                        }
+                    }
+                }
+
+                impl<$([<T $n>]),+> MultiVecColumns for [<MultiVec $count>]<$([<T $n>]),+> {
+                    type ColRef<'a> = [<MultiVec $count Item>]<$(&'a [[<T $n>]]),+>
+                    where Self: 'a, $([<T $n>]: 'a),+;
+
+                    type ColMut<'a> = [<MultiVec $count Item>]<$(&'a mut [[<T $n>]]),+>
+                    where Self: 'a, $([<T $n>]: 'a),+;
+
+                    type ItemRef<'a> = [<MultiVec $count Item>]<$(&'a [<T $n>]),+>
+                    where Self: 'a, $([<T $n>]: 'a),+;
+
+                    type ItemMut<'a> = [<MultiVec $count Item>]<$(&'a mut [<T $n>]),+>
+                    where Self: 'a, $([<T $n>]: 'a),+;
+
+                    fn col<'a>(&'a self, index: usize) -> Self::ColRef<'a> {
+                        match index {
+                            $($n => Self::ColRef::[<Col $n>](self.[<col $n>]()),)+
+                            _ => panic!("index out of range"),
+                        }
+                    }
+
+                    fn col_mut<'a>(&'a mut self, index: usize) -> Self::ColMut<'a> {
+                        match index {
+                            $($n => Self::ColMut::[<Col $n>](self.[<col $n _mut>]()),)+
+                            _ => panic!("index out of range"),
+                        }
+                    }
+
+                    fn item<'a>(&'a self, row: usize, col: usize) -> Self::ItemRef<'a> {
+                        match col {
+                            $($n => Self::ItemRef::[<Col $n>](&self.[<col $n>]()[row]),)+
+                            _ => panic!("index out of range"),
+                        }
+                    }
+
+                    fn item_mut<'a>(&'a mut self, row: usize, col: usize) -> Self::ItemMut<'a> {
+                        match col {
+                            $($n => Self::ItemMut::[<Col $n>](&mut self.[<col $n _mut>]()[row]),)+
+                            _ => panic!("index out of range"),
+                        }
+                    }
+                }
             }
         }
     };
@@ -362,6 +448,8 @@ mod tests {
             assert_eq!(v.col3(), &[2, 67]);
             assert_eq!(v.col4(), &[true, false]);
             assert_eq!(v.col5(), &["apple", "orange"]);
+
+            assert_eq!(v.item(0, 3), MultiVec6Item::Col3(&2));
         }
     }
 }
