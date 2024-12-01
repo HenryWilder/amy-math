@@ -1,10 +1,181 @@
-// use paste::paste;
-// use std::ops::*;
-// use crate::math::*;
+use paste::paste;
+use std::ops::*;
+use crate::math::*;
 
-// // fn test(x: i32) {
-// //     x.pow(exp)
-// // }
+macro_rules! try_impl_vec32 {
+    (F f $alias:ident $n:tt 32) => {
+        paste!{ pub type [<$alias $n>] = [<$alias $n f 32>]; }
+    };
+
+    ($PreU:ident $pre_l:ident $alias:ident $n:tt 32) => {
+        paste!{ pub type [<$PreU $alias $n>] = [<$alias $n $pre_l 32>]; }
+    };
+
+    ($PreU:ident $pre_l:ident $alias:ident $n:tt $bits:tt) => {};
+}
+
+macro_rules! impl_vec {
+    (#[$($doc:tt)+] $vec:ident $pre_l:ident $PreU:ident $n:tt $bits:tt { $(#[$($xyz_doc:tt)+] $xyz_vis:vis $xyz:ident)+ } $(#[$($alias_doc:tt)+] $alias:ident)*) => {
+        paste!{
+            #[doc = $($doc)+]
+            pub struct [<$vec $n $pre_l $bits>] {
+                $(
+                    #[doc = $($xyz_doc)+]
+                    $xyz_vis $xyz: [<$pre_l $bits>],
+                )+
+            }
+
+            try_impl_vec32!{ $PreU $pre_l $vec $n $bits }
+
+            $(
+                #[doc = $($alias_doc)+]
+                pub type [<$alias $n $pre_l $bits>] = [<$vec $n $pre_l $bits>];
+                try_impl_vec32!{ $PreU $pre_l $alias $n $bits }
+            )*
+        }
+    };
+
+    (
+        $desc:literal $pre_l:ident $PreU:ident $n:tt $bits:tt
+        { $($xyz_desc:literal $xyz:ident)+ }
+        { $($whd_desc:literal $whd:ident)+ }
+        { $($ijk_desc:literal $ijk:ident)+ }
+    ) => {
+        paste!{
+            impl_vec!{
+                #["A " $n "D " $desc " vector"]
+                Vec $pre_l $PreU $n $bits { $(#[$xyz_desc " position"] pub $xyz)+ }
+                #["An absolute " $n "D " $desc " position"]
+                Pos
+                #["A relative " $n "D " $desc " position"]
+                Offset
+            }
+
+            impl [<Vec $n $pre_l $bits>] {
+                #[doc = "Construct a " [<Vec $n>] " from position components"]
+                pub const fn new($($xyz: [<$pre_l $bits>]),+) -> Self {
+                    Self { $($xyz),+ }
+                }
+            }
+
+            impl_vec!{
+                #["A " $n "D " $desc " vector representing something's dimensions"]
+                Dim $pre_l $PreU $n $bits { $(#[$whd_desc " size"] pub $whd)+ }
+                #["A " $n "D " $desc " size"]
+                Size
+                #["A " $n "D half-size, like a radius"]
+                Extent
+            }
+
+            impl [<Dim $n $pre_l $bits>] {
+                #[doc = "Construct a " [<Dim $n>] " from size components"]
+                pub const fn new($($whd: [<$pre_l $bits>]),+) -> Self {
+                    Self { $($whd),+ }
+                }
+            }
+
+            impl_vec!{
+                #["A " $n "D " $desc " direction"]
+                Dir $pre_l $PreU $n $bits { $(#[$ijk_desc " lean"] $ijk)+ }
+                #["A " $n "D " $desc " vector representing a normal"]
+                Normal
+                #["A " $n "D " $desc " vector representing a tangent"]
+                Tangent
+            }
+
+            impl [<Dir $n $pre_l $bits>] {
+
+            }
+        }
+    };
+
+    (F $n:tt $bits:tt { $($xyz_desc:literal $xyz:ident)+ } { $($whd_desc:literal $whd:ident)+ } { $($ijk_desc:literal $ijk:ident)+ }) => {
+        impl_vec!{ "floating-point" f F $n $bits { $($xyz_desc $xyz)+ } { $($whd_desc $whd)+ } { $($ijk_desc $ijk)+ } }
+    };
+    (I $n:tt $bits:tt { $($xyz_desc:literal $xyz:ident)+ } { $($whd_desc:literal $whd:ident)+ } { $($ijk_desc:literal $ijk:ident)+ }) => {
+        impl_vec!{ "signed-integer" i I $n $bits { $($xyz_desc $xyz)+ } { $($whd_desc $whd)+ } { $($ijk_desc $ijk)+ } }
+    };
+    (U $n:tt $bits:tt { $($xyz_desc:literal $xyz:ident)+ } { $($whd_desc:literal $whd:ident)+ } { $($ijk_desc:literal $ijk:ident)+ }) => {
+        impl_vec!{ "unsigned-integer" u U $n $bits { $($xyz_desc $xyz)+ } { $($whd_desc $whd)+ } { $($ijk_desc $ijk)+ } }
+    };
+
+    ($PreU:ident 2 $bits:tt) => {
+        impl_vec!{
+            $PreU 2 $bits
+            { "Horizontal" x "Vertical" y     }
+            { "Horizontal" w "Vertical" h     }
+            { "Horizontal" i "Vertical" j     }
+        }
+    };
+    ($PreU:ident 3 $bits:tt) => {
+        impl_vec!{
+            $PreU 3 $bits
+            { "Horizontal" x "Vertical" y "Depth" z   }
+            { "Horizontal" w "Vertical" h "Depth" d   }
+            { "Horizontal" i "Vertical" j "Depth" k   }
+        }
+    };
+    ($PreU:ident 4 $bits:tt) => {
+        impl_vec!{
+            $PreU 4 $bits
+            { "Horizontal" x "Vertical" y "Depth" z "Time" w }
+            { "Horizontal" w "Vertical" h "Depth" d "Time" t }
+            { "Horizontal" i "Vertical" j "Depth" k "Time" l }
+        }
+    };
+    ($($PreU:ident $n:tt $bits:tt,)+) => {
+        $(impl_vec!{ $PreU $n $bits })+
+    };
+}
+
+impl_vec!{
+    F 2  32,
+    F 2  64,
+
+    F 3  32,
+    F 3  64,
+
+    F 4  32,
+    F 4  64,
+
+    I 2   8,
+    I 2  16,
+    I 2  32,
+    I 2  64,
+    I 2 128,
+
+    I 3   8,
+    I 3  16,
+    I 3  32,
+    I 3  64,
+    I 3 128,
+
+    I 4   8,
+    I 4  16,
+    I 4  32,
+    I 4  64,
+    I 4 128,
+
+    U 2   8,
+    U 2  16,
+    U 2  32,
+    U 2  64,
+    U 2 128,
+
+    U 3   8,
+    U 3  16,
+    U 3  32,
+    U 3  64,
+    U 3 128,
+
+    U 4   8,
+    U 4  16,
+    U 4  32,
+    U 4  64,
+    U 4 128,
+}
+
+const TEST: Size2 = Size2::new(5.0, 2.0);
 
 // macro_rules! int_vec_impl {
 //     (
