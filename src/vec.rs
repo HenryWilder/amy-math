@@ -95,6 +95,7 @@ impl<T, const N: usize> IntoIterator for Vector<T, N> { type Item = T; type Into
 
 pub trait DotProduct {
     type Output;
+    #[must_use]
     fn dot(self, other: Self) -> Self::Output;
 }
 impl<T, const N: usize> DotProduct for Vector<T, N> where Self: Mul<Output = Self>, T: std::iter::Sum {
@@ -114,6 +115,7 @@ impl<T, const N: usize> DotProduct for &Vector<T, N> where Self: Mul<Output = Ve
 
 pub trait MagnitudeSqr {
     type Output;
+    #[must_use]
     fn len_sqr(self) -> Self::Output;
 }
 impl<T, const N: usize> MagnitudeSqr for Vector<T, N> where Self: Clone + DotProduct {
@@ -129,6 +131,7 @@ impl<T, const N: usize> MagnitudeSqr for &Vector<T, N> where Self: DotProduct {
 
 pub trait DistanceSqr {
     type Output;
+    #[must_use]
     fn dist_sqr(self, other: Self) -> Self::Output;
 }
 impl<T, const N: usize, U: MagnitudeSqr> DistanceSqr for Vector<T, N> where Self: Sub<Output = U> {
@@ -144,28 +147,98 @@ impl<T, const N: usize, U: MagnitudeSqr> DistanceSqr for &Vector<T, N> where Sel
 
 pub trait Magnitude {
     type Output;
+    #[must_use]
     fn len(self) -> Self::Output;
 }
-impl<T, const N: usize, U> Magnitude for Vector<T, N> where Self: MagnitudeSqr<Output = U>, U: Sqrt {
+impl<T, const N: usize, U: Sqrt> Magnitude for Vector<T, N> where Self: MagnitudeSqr<Output = U> {
     type Output = U;
+    #[inline]
     fn len(self) -> Self::Output { self.len_sqr().sqrt() }
 }
-impl<T, const N: usize, U> Magnitude for &Vector<T, N> where Self: MagnitudeSqr<Output = U>, U: Sqrt {
+impl<T, const N: usize, U: Sqrt> Magnitude for &Vector<T, N> where Self: MagnitudeSqr<Output = U> {
     type Output = U;
+    #[inline]
     fn len(self) -> Self::Output { self.len_sqr().sqrt() }
 }
 
 pub trait Distance {
     type Output;
+    #[must_use]
     fn dist(self, other: Self) -> Self::Output;
 }
-impl<T, const N: usize, U> Distance for Vector<T, N> where Self: DistanceSqr<Output = U>, U: Sqrt {
+impl<T, const N: usize, U: Sqrt> Distance for Vector<T, N> where Self: DistanceSqr<Output = U> {
     type Output = U;
+    #[inline]
     fn dist(self, other: Self) -> Self::Output { self.dist_sqr(other).sqrt() }
 }
-impl<T, const N: usize, U> Distance for &Vector<T, N> where Self: DistanceSqr<Output = U>, U: Sqrt {
+impl<T, const N: usize, U: Sqrt> Distance for &Vector<T, N> where Self: DistanceSqr<Output = U> {
     type Output = U;
+    #[inline]
     fn dist(self, other: Self) -> Self::Output { self.dist_sqr(other).sqrt() }
+}
+
+pub trait Normalize {
+    type Output;
+    #[must_use]
+    fn norm(self) -> Self::Output;
+}
+impl<T, const N: usize> Normalize for Vector<T, N> where Self: Clone + Magnitude + Div<<Self as Magnitude>::Output> {
+    type Output = <Self as Div<<Self as Magnitude>::Output>>::Output;
+    #[inline]
+    fn norm(self) -> Self::Output { self.clone() / self.len() }
+}
+impl<T, const N: usize> Normalize for &Vector<T, N> where Self: Magnitude + Div<<Self as Magnitude>::Output> {
+    type Output = <Self as Div<<Self as Magnitude>::Output>>::Output;
+    #[inline]
+    fn norm(self) -> Self::Output { self / self.len() }
+}
+
+pub trait QNormalize {
+    type Output;
+    #[must_use]
+    unsafe fn qnorm(self) -> Self::Output;
+}
+impl<const N: usize> QNormalize for Vector<f32, N> {
+    type Output = Self;
+    #[inline]
+    unsafe fn qnorm(self) -> Self::Output { self.clone() * q_rsqrt(self.len_sqr()) }
+}
+impl<const N: usize> QNormalize for &Vector<f32, N> {
+    type Output = Vector<f32, N>;
+    #[inline]
+    unsafe fn qnorm(self) -> Self::Output { self * q_rsqrt(self.len_sqr()) }
+}
+
+pub trait Direction {
+    type Output;
+    #[must_use]
+    fn dir(self, other: Self) -> Self::Output;
+}
+impl<T, const N: usize, U: Normalize> Direction for Vector<T, N> where Self: Clone + Sub<Output = U> {
+    type Output = U::Output;
+    #[inline]
+    fn dir(self, other: Self) -> Self::Output { (other - self).norm() }
+}
+impl<T, const N: usize, U: Normalize> Direction for &Vector<T, N> where Self: Sub<Output = U> {
+    type Output = U::Output;
+    #[inline]
+    fn dir(self, other: Self) -> Self::Output { (other - self).norm() }
+}
+
+pub trait QDirection {
+    type Output;
+    #[must_use]
+    unsafe fn qdir(self, other: Self) -> Self::Output;
+}
+impl<const N: usize> QDirection for Vector<f32, N> {
+    type Output = Self;
+    #[inline]
+    unsafe fn qdir(self, other: Self) -> Self::Output { (other - self).qnorm() }
+}
+impl<const N: usize> QDirection for &Vector<f32, N> {
+    type Output = Vector<f32, N>;
+    #[inline]
+    unsafe fn qdir(self, other: Self) -> Self::Output { (other - self).qnorm() }
 }
 
 // general definition
