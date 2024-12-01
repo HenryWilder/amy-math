@@ -51,10 +51,42 @@ macro_rules! impl_vec {
                 Offset
             }
 
+            impl std::ops::Add for [<Vec $n $pre_l $bits>] {
+                type Output = Self;
+
+                fn add(self, rhs: Self) -> Self::Output {
+                    Self { $($xyz: self.$xyz + rhs.$xyz),+ }
+                }
+            }
+
+            impl std::ops::Sub for [<Vec $n $pre_l $bits>] {
+                type Output = Self;
+
+                fn sub(self, rhs: Self) -> Self::Output {
+                    Self { $($xyz: self.$xyz - rhs.$xyz),+ }
+                }
+            }
+
             impl [<Vec $n $pre_l $bits>] {
                 #[doc = "Construct a " [<Vec $n>] " from position components"]
                 pub const fn new($($xyz: [<$pre_l $bits>]),+) -> Self {
                     Self { $($xyz),+ }
+                }
+
+                pub fn len_sqr(&self) -> [<$pre_l $bits>] {
+                    todo!()
+                }
+
+                pub fn len(&self) -> [<$pre_l $bits>] {
+                    todo!()
+                }
+
+                pub fn dist_sqr(&self, other: Self) -> [<$pre_l $bits>] {
+                    (other - self).len_sqr()
+                }
+
+                pub fn dist(&self, other: Self) -> [<$pre_l $bits>] {
+                    (other - self).len()
                 }
             }
 
@@ -81,6 +113,16 @@ macro_rules! impl_vec {
                 Normal
                 #["A " $n "D " $desc " vector representing a tangent"]
                 Tangent
+            }
+
+            impl TryFrom<[<Vec $n $pre_l $bits>]> for [<Dir $n $pre_l $bits>] {
+                type Error = ();
+
+                fn try_from(value: [<Vec $n $pre_l $bits>]) -> Result<Self, Self::Error> {
+                    (value.len() == 1.0)
+                        .then(|| Self { $($ijk: $xyz),+ })
+                        .ok_or(())
+                }
             }
 
             impl [<Dir $n $pre_l $bits>] {
